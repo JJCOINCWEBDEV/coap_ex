@@ -70,6 +70,9 @@ defmodule CoAP.Message.Code do
 
   defguard is_request(code) when elem(code, 0) == 0
 
+  defguard is_valid_code(code)
+           when is_code(code) and elem(code, 0) in [0, 2, 3, 4, 5] and elem(code, 1) >= 0 and elem(code, 1) <= 31
+
   @spec request?(t()) :: boolean
   def request?(code) when is_code(code) and is_request(code), do: true
   def request?(_), do: false
@@ -89,9 +92,9 @@ defmodule CoAP.Message.Code do
   @spec encode_request(method()) :: t()
   def encode_request(method), do: @request_codes_map[method]
 
-  @spec decode_request(t()) :: method()
-  def decode_request(code) when is_code(code) and is_request(code), do: @request_codes[code]
-  def decode_request(code) when is_code(code) and not is_request(code), do: nil
+  @spec decode_request(t()) :: {:ok, method()} | {:ok, nil} | :error
+  def decode_request(code) when is_code(code) and is_request(code), do: Map.fetch(@request_codes, code)
+  def decode_request(code) when is_code(code) and not is_request(code), do: {:ok, nil}
 
   @doc """
   Encode the response code for binary message use
@@ -108,7 +111,7 @@ defmodule CoAP.Message.Code do
   @spec encode_response(status()) :: t()
   def encode_response(status), do: @response_codes_map[status]
 
-  @spec decode_response(t()) :: status()
-  def decode_response(code) when is_code(code) and not is_request(code), do: @response_codes[code]
-  def decode_response(code) when is_code(code) and is_request(code), do: nil
+  @spec decode_response(t()) :: {:ok, status()} | {:ok, nil} | :error
+  def decode_response(code) when is_code(code) and not is_request(code), do: Map.fetch(@response_codes, code)
+  def decode_response(code) when is_code(code) and is_request(code), do: {:ok, nil}
 end

@@ -5,16 +5,28 @@ defmodule CoAP.Message.Options do
 
       iex> message = <<57, 108, 111, 99, 97, 108, 104, 111, 115, 116, 131, 97, 112, 105,
       iex>             0, 17, 0, 57, 119, 104, 111, 61, 119, 111, 114, 108, 100>>
-      iex> CoAP.Message.Options.decode(message)
-      {%{
-        uri_path: ["api", ""],
-        uri_query: ["who=world"],
-        content_format: "text/plain",
-        uri_host: "localhost"
-      }, <<>>}
+      iex> CoAP.Message.Options.decode(%CoAP.Message.Decoder.State{data: message, message: %CoAP.Message{}, metadata: %{}, flow_control: :next, issues: []})
+      %CoAP.Message.Decoder.State{
+        data: <<>>,
+        message: %CoAP.Message{
+          options: %{
+            uri_path: ["api", ""],
+            uri_query: ["who=world"],
+            content_format: "text/plain",
+            uri_host: "localhost"
+          },
+          multipart: %CoAP.Multipart{
+            multipart: false
+          }
+        },
+        metadata: %{},
+        flow_control: :next,
+        issues: []
+      }
   """
-  def decode(message) do
-    __MODULE__.Decoder.options_and_payload(message)
+  @spec decode(CoAP.Message.Decoder.State.t()) :: CoAP.Message.Decoder.State.t()
+  def decode(%CoAP.Message.Decoder.State{} = state) do
+    __MODULE__.Decoder.decode(state)
   end
 
   @doc """
@@ -32,6 +44,6 @@ defmodule CoAP.Message.Options do
         0, 17, 0, 57, 119, 104, 111, 61, 119, 111, 114, 108, 100>>
   """
   def encode(options) do
-    __MODULE__.Encoder.to_binary(options)
+    __MODULE__.Encoder.encode(options)
   end
 end

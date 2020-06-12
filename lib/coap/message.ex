@@ -1,26 +1,11 @@
 defmodule CoAP.Message do
-  @version 1
-
-  defstruct version: @version,
-            type: :con,
-            request: nil,
-            code_class: 0,
-            code_detail: 0,
-            method: nil,
-            status: nil,
-            message_id: 1,
-            token: <<0x01>>,
-            options: %{},
-            multipart: nil,
-            payload: <<>>,
-            raw_size: 0
+  defstruct ~w(version type request code method status message_id token options multipart payload raw_size)a
 
   @type t :: %__MODULE__{
           version: integer,
           type: request_type,
           request: boolean,
-          code_class: integer,
-          code_detail: integer,
+          code: __MODULE__.Code.t(),
           method: request_method | {integer, integer},
           status: integer,
           message_id: integer,

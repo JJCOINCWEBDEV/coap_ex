@@ -1,28 +1,6 @@
 defmodule CoAP.Message.Option.Decoder do
   import CoAP.Message.Option, only: [is_unsigned: 1]
-
-  @options %{
-    1 => :if_match,
-    3 => :uri_host,
-    4 => :etag,
-    5 => :if_none_match,
-    # draft-ietf-core-observe-16
-    6 => :observe,
-    7 => :uri_port,
-    8 => :location_path,
-    11 => :uri_path,
-    12 => :content_format,
-    14 => :max_age,
-    15 => :uri_query,
-    17 => :accept,
-    20 => :location_query,
-    # draft-ietf-core-block-17
-    23 => :block2,
-    27 => :block1,
-    35 => :proxy_uri,
-    39 => :proxy_scheme,
-    60 => :size1
-  }
+  alias CoAP.Message.Decoder.State
 
   @content_formats %{
     0 => "text/plain",
@@ -34,15 +12,20 @@ defmodule CoAP.Message.Option.Decoder do
     60 => "application/cbor"
   }
 
-  def to_tuple(option_id, value) do
-    decode_option(option_id, value)
-  end
+  def decode(%State{metadata: %{current_option: option}} = state) do
+    key = CoAP.Message.Option.num_to_key(option.num)
 
-  defp decode_option(option_id, value) when is_integer(option_id) do
-    decode_option(@options[option_id], value)
-  end
+    cond do
+      key ->
+        update_in(state.metadata.current_option, &%{&1 | key: key, value: decode_value(key, option.value)})
 
-  defp decode_option(key, value) when is_atom(key), do: {key, decode_value(key, value)}
+      rem(option.num, 2) == 1 ->
+        State.add_issue(state, {:error, {:unknown_option, :critical, option.num, option.value}})
+
+      rem(option.num, 2) == 0 ->
+        State.add_issue(state, {:warning, {:unknown_option, :elective, option.num, option.value}})
+    end
+  end
 
   defp decode_value(:if_none_match, <<>>), do: true
   defp decode_value(:block1, value), do: CoAP.Block.decode(value)

@@ -22,8 +22,7 @@ defmodule CoAP.Message.Encoder do
       iex> message = %CoAP.Message{
       iex>   version: 1,
       iex>   type: :con,
-      iex>   code_class: 0,
-      iex>   code_detail: 3,
+      iex>   code: {0, 3},
       iex>   message_id: 12796,
       iex>   token: <<123, 92, 211, 222>>,
       iex>   options: %{
@@ -42,8 +41,7 @@ defmodule CoAP.Message.Encoder do
   def encode(%CoAP.Message{
         version: version,
         type: type,
-        code_class: code_class,
-        code_detail: code_detail,
+        code: {code_class, code_detail},
         message_id: message_id,
         token: token,
         payload: payload,

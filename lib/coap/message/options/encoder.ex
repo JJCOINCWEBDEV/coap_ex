@@ -1,9 +1,5 @@
 defmodule CoAP.Message.Options.Encoder do
-  def to_binary(options) do
-    encode(options)
-  end
-
-  defp encode(options) when is_map(options) do
+  def encode(options) when is_map(options) do
     options
     |> Map.to_list()
     |> Enum.map(&CoAP.Message.Option.encode/1)

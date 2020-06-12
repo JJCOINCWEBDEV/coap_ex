@@ -1,4 +1,28 @@
 defmodule CoAP.Message.Option do
+  @options %{
+    1 => :if_match,
+    3 => :uri_host,
+    4 => :etag,
+    5 => :if_none_match,
+    # draft-ietf-core-observe-16
+    6 => :observe,
+    7 => :uri_port,
+    8 => :location_path,
+    11 => :uri_path,
+    12 => :content_format,
+    14 => :max_age,
+    15 => :uri_query,
+    17 => :accept,
+    20 => :location_query,
+    # draft-ietf-core-block-17
+    23 => :block2,
+    27 => :block1,
+    35 => :proxy_uri,
+    39 => :proxy_scheme,
+    60 => :size1
+  }
+  @options_map Enum.into(@options, %{}, fn {k, v} -> {v, k} end)
+
   @repeatable_options [
     :if_match,
     :etag,
@@ -17,8 +41,12 @@ defmodule CoAP.Message.Option do
     :content_format
   ]
 
-  def decode(option_id, value) do
-    __MODULE__.Decoder.to_tuple(option_id, value)
+  def num_to_key(num) when is_integer(num), do: @options[num]
+  def key_to_num(key) when is_atom(key), do: @options_map[key]
+
+  @spec decode(CoAP.Message.Decoder.State.t()) :: CoAP.Message.Decoder.State.t()
+  def decode(%CoAP.Message.Decoder.State{} = state) do
+    __MODULE__.Decoder.decode(state)
   end
 
   def encode({key, value}) do

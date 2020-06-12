@@ -32,23 +32,41 @@ defmodule CoAP.Multipart do
           requested_number: integer
         }
 
-  @spec build(any, nil, nil) :: t()
-  def build(_request, nil, nil), do: %__MODULE__{}
+  @doc """
+  Does this message contain a block1 or block2 option
 
-  # Request variation
-  @spec build(boolean, CoAP.Block.t(), CoAP.Block.t()) :: t()
-  def build(true, block1, block2) do
-    build(Block.build(block1), Block.build(block2))
+  Examples
+
+      iex> CoAP.Multipart.build(%CoAP.Message{request: true, options: %{block1: {1, true, 1024}, block2: {0, false, 512}}})
+      %CoAP.Multipart{
+        control: %CoAP.Block{number: 0, more: false, size: 512},
+        description: %CoAP.Block{number: 1, more: true, size: 1024},
+        multipart: true,
+        more: true,
+        number: 1,
+        size: 1024,
+        requested_size: 512
+      }
+
+      iex> CoAP.Multipart.build(%CoAP.Message{request: true, options: %{}})
+      %CoAP.Multipart{multipart: false}
+
+  """
+  @spec build(CoAP.Message.t()) :: t()
+  def build(%CoAP.Message{request: request, options: options})
+      when is_map_key(options, :block1) or is_map_key(options, :block2) do
+    if request do
+      do_build(Block.build(options[:block1]), Block.build(options[:block2]))
+    else
+      do_build(Block.build(options[:block2]), Block.build(options[:block1]))
+    end
   end
 
-  # Response variation
-  @spec build(boolean, CoAP.Block.t(), CoAP.Block.t()) :: t()
-  def build(false, block1, block2) do
-    build(Block.build(block2), Block.build(block1))
+  def build(%CoAP.Message{}) do
+    %__MODULE__{}
   end
 
-  @spec build(CoAP.Block.t(), CoAP.Block.t()) :: t()
-  def build(%Block{} = description, %Block{} = control) do
+  defp do_build(%Block{} = description, %Block{} = control) do
     %__MODULE__{
       multipart: true,
       description: description,
@@ -61,8 +79,7 @@ defmodule CoAP.Multipart do
     }
   end
 
-  @spec build(nil, CoAP.Block.t()) :: t()
-  def build(nil, %Block{} = control) do
+  defp do_build(nil, %Block{} = control) do
     %__MODULE__{
       multipart: true,
       description: nil,
@@ -72,8 +89,7 @@ defmodule CoAP.Multipart do
     }
   end
 
-  @spec build(CoAP.Block.t(), nil) :: t()
-  def build(%Block{} = description, nil) do
+  defp do_build(%Block{} = description, nil) do
     case {description.more, description.number} do
       {false, 0} ->
         # Return nil if this is the first block, and there are no more
@@ -91,9 +107,6 @@ defmodule CoAP.Multipart do
         }
     end
   end
-
-  @spec build(nil, nil) :: t()
-  def build(nil, nil), do: %__MODULE__{multipart: false, description: nil, control: nil}
 
   @spec as_blocks(true, CoAP.Multipart.t()) :: %{block1: CoAP.Block.t(), block2: CoAP.Block.t()}
   def as_blocks(true, multipart) do

@@ -3,10 +3,6 @@ defmodule CoAP.Message do
 
   alias CoAP.Multipart
 
-  # import Logger, only: [debug: 1]
-
-  # @max_block_size 1024
-
   defstruct version: @version,
             type: :con,
             request: nil,
@@ -89,18 +85,6 @@ defmodule CoAP.Message do
   @types_map Enum.into(@types, %{}, fn {k, v} -> {v, k} end)
 
   @type request_type :: :con | :non | :ack | :reset
-
-  @message_header_format (quote do
-                            <<
-                              var!(version)::unsigned-integer-size(2),
-                              var!(type)::unsigned-integer-size(2),
-                              var!(token_length)::unsigned-integer-size(4),
-                              var!(code_class)::unsigned-integer-size(3),
-                              var!(code_detail)::unsigned-integer-size(5),
-                              var!(message_id)::unsigned-integer-size(16),
-                              var!(token_options_payload)::binary
-                            >>
-                          end)
 
   @doc """
   Encode a Message struct, with a multipart/block-wise transfer options, as a binary coap
@@ -237,11 +221,17 @@ defmodule CoAP.Message do
       }
   """
   @spec decode(binary) :: t()
-  def decode(unquote(@message_header_format) = raw_data) do
+  def decode(raw_data) do
     <<
+      version::unsigned-integer-size(2),
+      type::unsigned-integer-size(2),
+      token_length::unsigned-integer-size(4),
+      code_class::unsigned-integer-size(3),
+      code_detail::unsigned-integer-size(5),
+      message_id::unsigned-integer-size(16),
       token::binary-size(token_length),
       options_payload::binary
-    >> = token_options_payload
+    >> = raw_data
 
     {options, payload} = CoAP.MessageOptions.decode(options_payload)
 
@@ -342,110 +332,4 @@ defmodule CoAP.Message do
   defp status_for(0, _code_detail), do: nil
   @spec status_for(integer, integer) :: status_t
   defp status_for(code_class, code_detail), do: @methods[{code_class, code_detail}]
-
-  @doc """
-  Update a Message with the next_message_id
-  Ignore fields that should not be carried forward
-
-  Examples
-
-      iex> %CoAP.Message{
-      iex>   type: :con,
-      iex>   code_class: 0,
-      iex>   code_detail: 1,
-      iex>   token: <<0x01, 0x02, 0x03, 0x04>>,
-      iex>   message_id: 8,
-      iex>   method: :get,
-      iex>   options: %{},
-      iex>   request: true,
-      iex>   multipart: %CoAP.Multipart{},
-      iex>   payload: "somebigpayload"
-      iex> } |> CoAP.Message.next_message(10)
-      %CoAP.Message{
-        type: :con,
-        code_class: 0,
-        code_detail: 1,
-        token: <<0x01, 0x02, 0x03, 0x04>>,
-        message_id: 10,
-        method: :get,
-        options: %{},
-        request: true
-      }
-
-  """
-  @spec next_message(t(), integer) :: t()
-  def next_message(%__MODULE__{} = message, next_message_id) do
-    %{message | message_id: next_message_id, payload: <<>>, multipart: nil}
-  end
-
-  @doc """
-  Create the basic response for a con message
-  """
-  @spec response_for(t()) :: t()
-  def response_for(%__MODULE__{type: :con} = message) do
-    %__MODULE__{
-      type: :ack,
-      message_id: message.message_id,
-      token: message.token
-    }
-  end
-
-  @doc """
-  Create the basic response for a non message
-  """
-  @spec response_for(t()) :: t()
-  def response_for(%__MODULE__{type: :non} = message) do
-    %__MODULE__{
-      type: :non,
-      token: message.token
-    }
-  end
-
-  @doc """
-  Create the response for a message, with a specific method
-
-  Examples
-
-      iex> message = %CoAP.Message{
-      iex>   type: :con,
-      iex>   message_id: 3,
-      iex>   token: <<0x01, 0x02, 0x03, 0x04>>
-      iex> }
-      iex> CoAP.Message.response_for({:ok, :continue}, message)
-      %CoAP.Message{
-        type: :ack,
-        message_id: 3,
-        token: <<0x01, 0x02, 0x03, 0x04>>,
-        code_class: 2,
-        code_detail: 31
-      }
-
-  """
-  @spec response_for(request_method() | status_t(), t()) :: t()
-  def response_for(method, message) do
-    {code_class, code_detail} = encode_method(method)
-
-    %__MODULE__{response_for(message) | code_class: code_class, code_detail: code_detail}
-  end
-
-  @doc """
-  Create response including status and payload, used in app => peer response
-  """
-  @spec response_for(status_code, binary, t()) :: t()
-  def response_for({code_class, code_detail}, payload, message) do
-    %__MODULE__{
-      response_for(message)
-      | code_class: code_class,
-        code_detail: code_detail,
-        payload: payload
-    }
-  end
-
-  @doc """
-  Create response including method and payload
-  """
-  @spec response_for(request_method(), binary, t()) :: t()
-  def response_for(method, payload, message) do
-    %__MODULE__{response_for(message) | method: method, payload: payload}
-  end
 end

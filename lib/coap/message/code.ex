@@ -1,4 +1,6 @@
 defmodule CoAP.Message.Code do
+  alias CoAP.Message.Decoder.State
+
   @typedoc "Tuple of two codes - first one is class code, second one is detail code"
   @type t :: {integer(), integer()}
 
@@ -23,6 +25,8 @@ defmodule CoAP.Message.Code do
              | :service_unavailable
              | :gateway_timeout
              | :proxying_not_supported}
+
+  @type request_response :: {:request, method | nil} | {:response, status | nil} | :empty
 
   @request_codes %{
     # RFC 7252
@@ -68,10 +72,48 @@ defmodule CoAP.Message.Code do
   defguard is_code(code)
            when is_tuple(code) and tuple_size(code) == 2 and is_integer(elem(code, 0)) and is_integer(elem(code, 1))
 
+  defguard is_empty(code) when elem(code, 0) == 0 and elem(code, 1) == 0
+
   defguard is_request(code) when elem(code, 0) == 0
 
   defguard is_valid_code(code)
            when is_code(code) and elem(code, 0) in [0, 2, 3, 4, 5] and elem(code, 1) >= 0 and elem(code, 1) <= 31
+
+  def decode(code, state) when is_code(code) and is_valid_code(code) and is_empty(code) do
+    State.next(state, state.data, %{state.message | request_response: :empty})
+  end
+
+  def decode(code, state) when is_code(code) and is_valid_code(code) and is_request(code) do
+    case Map.fetch(@request_codes, code) do
+      {:ok, value} ->
+        State.next(state, state.data, %{state.message | request_response: {:request, value}})
+
+      :error ->
+        state
+        |> State.add_issue({:warning, {:unknown_request_method, code}})
+        |> State.next(state.data, %{state.message | request_response: {:request, nil}})
+    end
+  end
+
+  def decode(code, state) when is_code(code) and is_valid_code(code) and not is_request(code) do
+    case Map.fetch(@response_codes, code) do
+      {:ok, value} ->
+        State.next(state, state.data, %{state.message | request_response: {:response, value}})
+
+      :error ->
+        state
+        |> State.add_issue({:warning, {:unknown_response_status, code}})
+        |> State.next(state.data, %{state.message | request_response: {:response, nil}})
+    end
+  end
+
+  def decode(code, state) when is_code(code) and not is_valid_code(code) do
+    request_response = if request?(code), do: {:request, nil}, else: {:response, nil}
+
+    state
+    |> State.add_issue({:error, {:reserved_code_used, code}})
+    |> State.next(state.data, %{state.message | request_response: request_response})
+  end
 
   @spec request?(t()) :: boolean
   def request?(code) when is_code(code) and is_request(code), do: true
@@ -92,10 +134,6 @@ defmodule CoAP.Message.Code do
   @spec encode_request(method()) :: t()
   def encode_request(method), do: @request_codes_map[method]
 
-  @spec decode_request(t()) :: {:ok, method()} | {:ok, nil} | :error
-  def decode_request(code) when is_code(code) and is_request(code), do: Map.fetch(@request_codes, code)
-  def decode_request(code) when is_code(code) and not is_request(code), do: {:ok, nil}
-
   @doc """
   Encode the response code for binary message use
 
@@ -110,8 +148,4 @@ defmodule CoAP.Message.Code do
   """
   @spec encode_response(status()) :: t()
   def encode_response(status), do: @response_codes_map[status]
-
-  @spec decode_response(t()) :: {:ok, status()} | {:ok, nil} | :error
-  def decode_response(code) when is_code(code) and not is_request(code), do: Map.fetch(@response_codes, code)
-  def decode_response(code) when is_code(code) and is_request(code), do: {:ok, nil}
 end

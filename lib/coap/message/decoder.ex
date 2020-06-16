@@ -1,6 +1,4 @@
 defmodule CoAP.Message.Decoder do
-  import CoAP.Message.Code, only: [is_valid_code: 1]
-
   @type decode_warning_reason ::
           {:unknown_request_method, CoAP.Message.Code.t()}
           | {:unknown_response_status, CoAP.Message.Code.t()}
@@ -84,20 +82,20 @@ defmodule CoAP.Message.Decoder do
           {:ignore, message, ignore_issues}
 
         Enum.any?(issues, fn {type, _issue} -> type == :error end) ->
-          ignore_issues =
+          error_issues =
             issues
             |> Enum.filter(fn {type, _issue} -> type == :error end)
             |> Enum.reduce([], fn {_type, issue}, acc -> [issue | acc] end)
 
-          {:error, message, ignore_issues}
+          {:error, message, error_issues}
 
         Enum.any?(issues, fn {type, _issue} -> type == :warning end) ->
-          ignore_issues =
+          warning_issues =
             issues
             |> Enum.filter(fn {type, _issue} -> type == :warning end)
             |> Enum.reduce([], fn {_type, issue}, acc -> [issue | acc] end)
 
-          {:warning, message, ignore_issues}
+          {:warning, message, warning_issues}
 
         Enum.count(issues) == 0 ->
           {:ok, message}
@@ -127,7 +125,7 @@ defmodule CoAP.Message.Decoder do
       {:ok, %CoAP.Message{
         version: 1,
         type: :con,
-        request: true,
+        request_response: {:request, :get},
         code: {0, 1},
         message_id: 1,
         token: <<163, 249, 107, 129>>,
@@ -139,7 +137,6 @@ defmodule CoAP.Message.Decoder do
         },
         payload: "data",
         multipart: %CoAP.Multipart{control: nil, description: nil, more: false, multipart: false, number: 0},
-        method: :get,
         raw_size: 40
       }}
 
@@ -160,7 +157,7 @@ defmodule CoAP.Message.Decoder do
 
       iex> message = <<0x45, 0x00, 0x00, 0x01, 0xAA, 0xAA, 0xAA>>
       iex> CoAP.Message.decode(message)
-      {:error, %CoAP.Message{raw_size: 7, version: 1, type: :con, code: {0, 0}, message_id: 1, request: true}, [{:message_incomplete, :token, <<0xAA, 0xAA, 0xAA>>}]}
+      {:error, %CoAP.Message{raw_size: 7, version: 1, type: :con, code: {0, 0}, message_id: 1, request_response: :empty}, [{:message_incomplete, :token, <<0xAA, 0xAA, 0xAA>>}]}
   """
   @spec decode(binary) ::
           {:ok, CoAP.Message.t()}
@@ -213,42 +210,11 @@ defmodule CoAP.Message.Decoder do
            data: <<code_class::unsigned-integer-size(3), code_detail::unsigned-integer-size(5), rest::bitstring>>
          } = state,
          :code
-       )
-       when is_valid_code({code_class, code_detail}) do
-    code = {code_class, code_detail}
-    message = %{state.message | code: code, request: CoAP.Message.Code.request?(code)}
-    issues = state.issues
-
-    {message, issues} =
-      case CoAP.Message.Code.decode_request(code) do
-        {:ok, method} -> {%{message | method: method}, issues}
-        :error -> {message, [{:warning, {:unknown_request_method, code}} | issues]}
-      end
-
-    {message, issues} =
-      case CoAP.Message.Code.decode_response(code) do
-        {:ok, status} -> {%{message | status: status}, issues}
-        :error -> {message, [{:warning, {:unknown_response_status, code}} | issues]}
-      end
-
-    state
-    |> State.add_issues(issues)
-    |> State.next(rest, message)
-  end
-
-  defp decode_field(
-         %State{
-           data: <<code_class::unsigned-integer-size(3), code_detail::unsigned-integer-size(5), rest::bitstring>>
-         } = state,
-         :code
-       )
-       when not is_valid_code({code_class, code_detail}) do
-    code = {code_class, code_detail}
-    message = %{state.message | code: code, request: CoAP.Message.Code.request?(code)}
-
-    state
-    |> State.add_issue({:error, {:reserved_code_used, code}})
-    |> State.next(rest, message)
+       ) do
+    CoAP.Message.Code.decode(
+      {code_class, code_detail},
+      State.next(state, rest, %{state.message | code: {code_class, code_detail}})
+    )
   end
 
   defp decode_field(%State{data: <<message_id::unsigned-integer-size(16), rest::bitstring>>} = state, :message_id) do

@@ -37,7 +37,7 @@ defmodule CoAP.Multipart do
 
   Examples
 
-      iex> CoAP.Multipart.build(%CoAP.Message{request: true, options: %{block1: {1, true, 1024}, block2: {0, false, 512}}})
+      iex> CoAP.Multipart.build(%CoAP.Message{request_response: {:request, :put}, options: %{block1: {1, true, 1024}, block2: {0, false, 512}}})
       %CoAP.Multipart{
         control: %CoAP.Block{number: 0, more: false, size: 512},
         description: %CoAP.Block{number: 1, more: true, size: 1024},
@@ -48,17 +48,16 @@ defmodule CoAP.Multipart do
         requested_size: 512
       }
 
-      iex> CoAP.Multipart.build(%CoAP.Message{request: true, options: %{}})
+      iex> CoAP.Multipart.build(%CoAP.Message{request_response: {:request, :put}, options: %{}})
       %CoAP.Multipart{multipart: false}
 
   """
   @spec build(CoAP.Message.t()) :: t()
-  def build(%CoAP.Message{request: request, options: options})
+  def build(%CoAP.Message{request_response: request_response, options: options})
       when is_map_key(options, :block1) or is_map_key(options, :block2) do
-    if request do
-      do_build(Block.build(options[:block1]), Block.build(options[:block2]))
-    else
-      do_build(Block.build(options[:block2]), Block.build(options[:block1]))
+    case request_response do
+      {:request, _} -> do_build(Block.build(options[:block1]), Block.build(options[:block2]))
+      {:response, _} -> do_build(Block.build(options[:block2]), Block.build(options[:block1]))
     end
   end
 
@@ -108,8 +107,11 @@ defmodule CoAP.Multipart do
     end
   end
 
-  @spec as_blocks(true, CoAP.Multipart.t()) :: %{block1: CoAP.Block.t(), block2: CoAP.Block.t()}
-  def as_blocks(true, multipart) do
+  @spec as_blocks(CoAP.Message.request_response(), CoAP.Multipart.t()) :: %{
+          block1: CoAP.Block.t(),
+          block2: CoAP.Block.t()
+        }
+  def as_blocks({:request, _}, multipart) do
     %{
       block1: multipart.description |> Block.to_tuple(),
       block2: multipart.control |> Block.to_tuple()
@@ -118,8 +120,7 @@ defmodule CoAP.Multipart do
   end
 
   # TODO: if we get nil here, that's wrong
-  @spec as_blocks(false, CoAP.Multipart.t()) :: %{block1: CoAP.Block.t(), block2: CoAP.Block.t()}
-  def as_blocks(false, multipart) do
+  def as_blocks({:response, _}, multipart) do
     %{
       block1: multipart.control |> Block.to_tuple(),
       block2: multipart.description |> Block.to_tuple()

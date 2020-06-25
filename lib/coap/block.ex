@@ -29,6 +29,9 @@ defmodule CoAP.Block do
   @spec build(nil) :: nil
   def build(nil), do: nil
 
+  @spec build(:error) :: nil
+  def build(:error), do: nil
+
   @spec to_tuple(nil) :: nil
   def to_tuple(nil), do: nil
 
@@ -64,6 +67,12 @@ defmodule CoAP.Block do
   @spec decode(binary_t_large()) :: t()
   def decode(<<number::size(28), more::size(1), size_exponent::size(3)>>),
     do: decode(number, more, size_exponent)
+
+  @doc """
+  Unrecognized binary block
+  """
+  def decode(binary) when is_binary(binary),
+    do: :error
 
   @doc """
   Decode tuple from binary block to Block struct

@@ -107,6 +107,10 @@ defmodule CoAP.Multipart do
     end
   end
 
+  defp do_build(nil, nil) do
+    %__MODULE__{}
+  end
+
   @spec as_blocks(CoAP.Message.request_response(), CoAP.Multipart.t()) :: %{
           block1: CoAP.Block.t(),
           block2: CoAP.Block.t()

@@ -95,8 +95,10 @@ defmodule CoAP.Message.Encoder do
     <<
       token::binary,
       CoAP.Message.Options.encode(options)::binary,
-      @payload_marker,
-      payload::binary
+      encode_payload(payload)::binary
     >>
   end
+
+  defp encode_payload(<<>>), do: <<>>
+  defp encode_payload(payload), do: <<@payload_marker, payload::binary>>
 end
